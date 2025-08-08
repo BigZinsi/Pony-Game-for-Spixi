@@ -1,0 +1,101 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+
+public class PongGame extends JFrame implements ActionListener, KeyListener {
+    private final int WIDTH = 800;
+    private final int HEIGHT = 600;
+    private final int PADDLE_WIDTH = 10;
+    private final int PADDLE_HEIGHT = 100;
+    private final int BALL_SIZE = 20;
+    private final int PADDLE_SPEED = 8;
+    private final int BALL_SPEED = 5;
+
+    private int player1_y = (HEIGHT - PADDLE_HEIGHT) / 2;
+    private int player2_y = (HEIGHT - PADDLE_HEIGHT) / 2;
+    private int ball_x = WIDTH / 2 - BALL_SIZE / 2;
+    private int ball_y = HEIGHT / 2 - BALL_SIZE / 2;
+    private int ball_dx = BALL_SPEED;
+    private int ball_dy = BALL_SPEED;
+    private int player1Score = 0;
+    private int player2Score = 0;
+
+    private Timer timer;
+    private boolean upPressed = false;
+    private boolean downPressed = false;
+
+    public PongGame() {
+        setTitle("Pong-Spiel mit KI-Gegner");
+        setSize(WIDTH, HEIGHT);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
+
+        JPanel gamePanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                draw(g);
+            }
+        };
+        gamePanel.setBackground(Color.BLACK);
+        setContentPane(gamePanel);
+
+        addKeyListener(this);
+        timer = new Timer(20, this);
+        timer.start();
+    }
+
+    private void draw(Graphics g) {
+        g.setColor(Color.WHITE);
+        g.fillRect(10, player1_y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        g.fillRect(WIDTH - 20, player2_y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        g.fillRect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
+        g.setFont(new Font("Arial", Font.BOLD, 20));
+        g.drawString("Spieler 1: " + player1Score, 50, 50);
+        g.drawString("Spieler 2: " + player2Score, WIDTH - 150, 50);
+    }
+
+    private void move() {
+        if (upPressed && player1_y > 0) player1_y -= PADDLE_SPEED;
+        if (downPressed && player1_y < HEIGHT - PADDLE_HEIGHT) player1_y += PADDLE_SPEED;
+
+        if (ball_x > WIDTH / 2) {
+            if (ball_y < player2_y + PADDLE_HEIGHT / 2) player2_y -= PADDLE_SPEED;
+            else if (ball_y > player2_y + PADDLE_HEIGHT / 2) player2_y += PADDLE_SPEED;
+        }
+
+        ball_x += ball_dx;
+        ball_y += ball_dy;
+
+        if (ball_y <= 0 || ball_y >= HEIGHT - BALL_SIZE) ball_dy = -ball_dy;
+        if (ball_x <= 10 + PADDLE_WIDTH && ball_y >= player1_y && ball_y <= player1_y + PADDLE_HEIGHT) ball_dx = -ball_dx;
+        if (ball_x >= WIDTH - 20 - BALL_SIZE && ball_y >= player2_y && ball_y <= player2_y + PADDLE_HEIGHT) ball_dx = -ball_dx;
+
+        if (ball_x <= 0) { player2Score++; resetBall(); }
+        else if (ball_x >= WIDTH - BALL_SIZE) { player1Score++; resetBall(); }
+    }
+
+    private void resetBall() {
+        ball_x = WIDTH / 2 - BALL_SIZE / 2;
+        ball_y = HEIGHT / 2 - BALL_SIZE / 2;
+        ball_dx = BALL_SPEED;
+        ball_dy = BALL_SPEED;
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) { move(); repaint(); }
+    @Override
+    public void keyPressed(KeyEvent e) { if (e.getKeyCode() == KeyEvent.VK_UP) upPressed = true; else if (e.getKeyCode() == KeyEvent.VK_DOWN) downPressed = true; }
+    @Override
+    public void keyReleased(KeyEvent e) { if (e.getKeyCode() == KeyEvent.VK_UP) upPressed = false; else if (e.getKeyCode() == KeyEvent.VK_DOWN) downPressed = false; }
+    @Override
+    public void keyTyped(KeyEvent e) {}
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> { PongGame game = new PongGame(); game.setVisible(true); });
+    }
+}
