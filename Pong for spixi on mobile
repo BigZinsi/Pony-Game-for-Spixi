@@ -1,0 +1,179 @@
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+
+public class PongGameView extends SurfaceView implements SurfaceHolder.Callback {
+    private GameThread gameThread;
+    private float player1_y, player2_y, ball_x, ball_y;
+    private float ball_dx, ball_dy;
+    private int player1Score, player2Score;
+    private final float PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE, PADDLE_SPEED, BALL_SPEED;
+    private final float SCREEN_WIDTH, SCREEN_HEIGHT;
+    private boolean moveUp, moveDown;
+
+    private final Paint paddlePaint, ballPaint, scorePaint;
+
+    public PongGameView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        getHolder().addCallback(this);
+
+        // Skalierung basierend auf Bildschirmgröße
+        SCREEN_WIDTH = getResources().getDisplayMetrics().widthPixels;
+        SCREEN_HEIGHT = getResources().getDisplayMetrics().heightPixels;
+        PADDLE_WIDTH = SCREEN_WIDTH * 0.02f;
+        PADDLE_HEIGHT = SCREEN_HEIGHT * 0.15f;
+        BALL_SIZE = SCREEN_WIDTH * 0.03f;
+        PADDLE_SPEED = SCREEN_HEIGHT * 0.02f;
+        BALL_SPEED = SCREEN_WIDTH * 0.01f;
+
+        // Initialisierung der Positionen
+        player1_y = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2;
+        player2_y = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2;
+        ball_x = SCREEN_WIDTH / 2 - BALL_SIZE / 2;
+        ball_y = SCREEN_HEIGHT / 2 - BALL_SIZE / 2;
+        ball_dx = BALL_SPEED;
+        ball_dy = BALL_SPEED;
+
+        // Farben und Stile
+        paddlePaint = new Paint();
+        paddlePaint.setColor(Color.WHITE);
+        ballPaint = new Paint();
+        ballPaint.setColor(Color.WHITE);
+        scorePaint = new Paint();
+        scorePaint.setColor(Color.WHITE);
+        scorePaint.setTextSize(SCREEN_WIDTH * 0.05f);
+
+        setFocusable(true);
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        gameThread = new GameThread(getHolder());
+        gameThread.setRunning(true);
+        gameThread.start();
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {}
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        boolean retry = true;
+        gameThread.setRunning(false);
+        while (retry) {
+            try {
+                gameThread.join();
+                retry = false;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE) {
+            float touchY = event.getY();
+            if (touchY < SCREEN_HEIGHT / 2) {
+                moveUp = true;
+                moveDown = false;
+            } else {
+                moveDown = true;
+                moveUp = false;
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_UP) {
+            moveUp = false;
+            moveDown = false;
+        }
+        return true;
+    }
+
+    private void update() {
+        // Spieler-Paddel bewegen
+        if (moveUp && player1_y > 0) player1_y -= PADDLE_SPEED;
+        if (moveDown && player1_y < SCREEN_HEIGHT - PADDLE_HEIGHT) player1_y += PADDLE_SPEED;
+
+        // KI-Paddel bewegen
+        if (ball_x > SCREEN_WIDTH / 2) {
+            if (ball_y < player2_y + PADDLE_HEIGHT / 2) player2_y -= PADDLE_SPEED;
+            else if (ball_y > player2_y + PADDLE_HEIGHT / 2) player2_y += PADDLE_SPEED;
+        }
+
+        // Ball bewegen
+        ball_x += ball_dx;
+        ball_y += ball_dy;
+
+        // Kollisionen
+        if (ball_y <= 0 || ball_y >= SCREEN_HEIGHT - BALL_SIZE) ball_dy = -ball_dy;
+        if (ball_x <= PADDLE_WIDTH + 10 && ball_y >= player1_y && ball_y <= player1_y + PADDLE_HEIGHT)
+            ball_dx = -ball_dx;
+        if (ball_x >= SCREEN_WIDTH - PADDLE_WIDTH - BALL_SIZE - 10 && ball_y >= player2_y && ball_y <= player2_y + PADDLE_HEIGHT)
+            ball_dx = -ball_dx;
+
+        // Punktevergabe und Reset
+        if (ball_x <= 0) {
+            player2Score++;
+            resetBall();
+        } else if (ball_x >= SCREEN_WIDTH - BALL_SIZE) {
+            player1Score++;
+            resetBall();
+        }
+    }
+
+    private void resetBall() {
+        ball_x = SCREEN_WIDTH / 2 - BALL_SIZE / 2;
+        ball_y = SCREEN_HEIGHT / 2 - BALL_SIZE / 2;
+        ball_dx = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+        ball_dy = BALL_SPEED * (Math.random() > 0.5 ? 1 : -1);
+    }
+
+    private void draw(Canvas canvas) {
+        canvas.drawColor(Color.BLACK);
+        canvas.drawRect(10, player1_y, 10 + PADDLE_WIDTH, player1_y + PADDLE_HEIGHT, paddlePaint);
+        canvas.drawRect(SCREEN_WIDTH - PADDLE_WIDTH - 10, player2_y, SCREEN_WIDTH - 10, player2_y + PADDLE_HEIGHT, paddlePaint);
+        canvas.drawRect(ball_x, ball_y, ball_x + BALL_SIZE, ball_y + BALL_SIZE, ballPaint);
+        canvas.drawText("Spieler: " + player1Score, SCREEN_WIDTH * 0.05f, SCREEN_HEIGHT * 0.1f, scorePaint);
+        canvas.drawText("KI: " + player2Score, SCREEN_WIDTH * 0.75f, SCREEN_HEIGHT * 0.1f, scorePaint);
+    }
+
+    private class GameThread extends Thread {
+        private final SurfaceHolder surfaceHolder;
+        private boolean running;
+
+        public GameThread(SurfaceHolder surfaceHolder) {
+            this.surfaceHolder = surfaceHolder;
+        }
+
+        public void setRunning(boolean running) {
+            this.running = running;
+        }
+
+        @Override
+        public void run() {
+            while (running) {
+                Canvas canvas = null;
+                try {
+                    canvas = surfaceHolder.lockCanvas();
+                    synchronized (surfaceHolder) {
+                        update();
+                        draw(canvas);
+                    }
+                } finally {
+                    if (canvas != null) {
+                        surfaceHolder.unlockCanvasAndPost(canvas);
+                    }
+                }
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
